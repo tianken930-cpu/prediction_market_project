@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prediction-market-longshot-bias"
+version = "0.1.0"
+description = "Reproducible calibration, favorite-longshot bias, and Kelly sizing analysis for Kalshi and Polymarket."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scikit-learn>=1.4",
+    "scipy>=1.12",
+]
+
+[project.scripts]
+prediction-market-analysis = "prediction_market_analysis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

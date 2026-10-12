@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+tmp/
+dist/
+build/
+*.egg-info/
+
+# Large raw/intermediate datasets are retained locally, not pushed to GitHub.
+data/kalshi_raw_markets.csv
+data/kalshi_progress.csv
+data/kalshi_48h.csv
+data/kalshi_clean.csv
+data/polymarket_raw_partial.json
+data/polymarket_binary.json
+data/polymarket_progress.csv
+data/polymarket_48h.csv
+
+# Local research notes and redundant notebook backups.
+notebooks/Note*.pdf
+notebooks/*backup.ipynb
+
