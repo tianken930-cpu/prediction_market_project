@@ -53,6 +53,33 @@ The two venues should not be described as having the same pattern. The 20–30% 
 
 Those differences are descriptive, not causal. They could reflect category mix, contract design, liquidity, correlated questions, or measurement choices. They do not identify a venue-level behavioral mechanism.
 
+## Forecast quality also varied by category
+
+The pooled result also hides meaningful category heterogeneity. Lower Brier scores
+indicate more accurate probability forecasts in this sample, but the differences
+should not be read as evidence that any category is inherently more efficient.
+
+| Category | Contracts | Market Brier |
+|---|---:|---:|
+| Science/Technology | 656 | 0.0412 |
+| Economics/Finance | 4,593 | 0.0661 |
+| Politics | 3,198 | 0.1061 |
+| Crypto | 22,576 | 0.1775 |
+| Sports | 41,027 | 0.1803 |
+
+These differences could reflect sample size, venue composition, contract
+construction, liquidity, or time period rather than a stable category-level
+property. Economics/Finance is an interesting future research direction: its
+low Brier score raises the question of whether a category-specific calibration
+model could outperform the pooled model, but an Economics/Finance-only trading
+strategy has not been tested here.
+
+Better predictive accuracy does not necessarily mean a better trading
+opportunity. A category can be easier to predict because market prices already
+incorporate information well. A profitable strategy requires a persistent gap
+between market price and true probability that survives out of sample and after
+execution costs.
+
 ## A historical calibration curve did not become trading alpha
 
 A pattern in a full historical sample is not yet a trading strategy. To impose a basic time boundary, I used a purged chronological split:
