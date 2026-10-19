@@ -16,6 +16,12 @@ dependencies = [
     "scipy>=1.12",
 ]
 
+[project.optional-dependencies]
+# Only the archived acquisition/exploration notebook performs HTTP requests.
+acquisition = [
+    "requests>=2.31",
+]
+
 [project.scripts]
 prediction-market-analysis = "prediction_market_analysis.cli:main"
 

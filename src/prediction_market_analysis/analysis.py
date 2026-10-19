@@ -26,6 +26,17 @@ REQUIRED_COLUMNS = {
     "venue",
     "entry_time",
 }
+BACKTEST_REQUIRED_COLUMNS = {
+    "entry_time",
+    "resolution_date",
+    "price",
+    "p_model",
+    "outcome",
+}
+# A cash stake below one cent cannot be meaningfully represented as a trade.  This
+# prevents floating-point dust from being counted as an execution after a bankroll
+# has become very small.
+MINIMUM_EXECUTED_STAKE = 0.01
 
 
 @dataclass(frozen=True)
@@ -38,6 +49,7 @@ class AnalysisConfig:
     starting_bankroll: float = 10_000.0
     baseline_kelly_fraction: float = 0.25
     spread: float = 0.02
+    minimum_executed_stake: float = MINIMUM_EXECUTED_STAKE
 
 
 @dataclass
@@ -223,14 +235,79 @@ def prepare_purged_split(
     return train, test, split_time
 
 
+def _finite_float(value: object, name: str) -> float:
+    """Convert a scalar setting to a finite float with a clear error."""
+
+    try:
+        converted = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number.") from exc
+    if not np.isfinite(converted):
+        raise ValueError(f"{name} must be a finite number.")
+    return converted
+
+
+def _validate_backtest_data(data: pd.DataFrame) -> pd.DataFrame:
+    """Return validated backtest inputs without mutating the caller's frame."""
+
+    if not isinstance(data, pd.DataFrame):
+        raise ValueError("Backtest data must be a pandas DataFrame.")
+    if data.empty:
+        raise ValueError("Backtest data must contain at least one contract.")
+
+    missing_columns = BACKTEST_REQUIRED_COLUMNS.difference(data.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Backtest data is missing columns: {sorted(missing_columns)}"
+        )
+
+    validated = data.copy()
+    for column in ("entry_time", "resolution_date"):
+        validated[column] = pd.to_datetime(
+            validated[column], format="mixed", utc=True, errors="coerce"
+        )
+    for column in ("price", "p_model", "outcome"):
+        validated[column] = pd.to_numeric(validated[column], errors="coerce")
+
+    if validated[["entry_time", "resolution_date"]].isna().any().any():
+        raise ValueError("Backtest timestamps must be valid and non-missing.")
+    numeric_columns = ["price", "p_model", "outcome"]
+    if not np.isfinite(validated[numeric_columns].to_numpy(dtype=float)).all():
+        raise ValueError("Backtest price, model probability, and outcome must be finite.")
+    if not validated["price"].between(0.0, 1.0, inclusive="both").all():
+        raise ValueError("Backtest market prices must be between 0 and 1.")
+    if not validated["p_model"].between(0.0, 1.0, inclusive="both").all():
+        raise ValueError("Backtest model probabilities must be between 0 and 1.")
+    if not validated["outcome"].isin([0, 1]).all():
+        raise ValueError("Backtest outcomes must be binary (0 or 1).")
+    if (validated["entry_time"] >= validated["resolution_date"]).any():
+        raise ValueError("Every backtest entry must precede its market resolution.")
+
+    validated["outcome"] = validated["outcome"].astype(int)
+    return validated
+
+
 def run_kelly_backtest(
     data: pd.DataFrame,
     *,
     kelly_fraction: float,
     spread: float,
     starting_bankroll: float,
+    minimum_executed_stake: float = MINIMUM_EXECUTED_STAKE,
 ) -> BacktestResult:
-    """Backtest simultaneous, cash-constrained binary-contract positions."""
+    """Backtest simultaneous, cash-constrained binary-contract positions.
+
+    ``eligible_signals`` counts positive mathematical Kelly edges. ``trades``
+    counts only positions at or above ``minimum_executed_stake``; this avoids
+    reporting floating-point dust as an execution.
+    """
+
+    kelly_fraction = _finite_float(kelly_fraction, "kelly_fraction")
+    spread = _finite_float(spread, "spread")
+    starting_bankroll = _finite_float(starting_bankroll, "starting_bankroll")
+    minimum_executed_stake = _finite_float(
+        minimum_executed_stake, "minimum_executed_stake"
+    )
 
     if not 0.0 < kelly_fraction <= 1.0:
         raise ValueError("kelly_fraction must be in (0, 1].")
@@ -238,8 +315,10 @@ def run_kelly_backtest(
         raise ValueError("spread must be in [0, 1).")
     if starting_bankroll <= 0:
         raise ValueError("starting_bankroll must be positive.")
+    if minimum_executed_stake < 0.0:
+        raise ValueError("minimum_executed_stake must be non-negative.")
 
-    ordered = data.sort_values("entry_time").copy()
+    ordered = _validate_backtest_data(data).sort_values("entry_time").copy()
     half_spread = spread / 2.0
     cash = float(starting_bankroll)
     locked_capital = 0.0
@@ -249,6 +328,9 @@ def run_kelly_backtest(
     pnl = pd.Series(0.0, index=ordered.index, dtype=float)
     equity_times: list[pd.Timestamp] = []
     equity_values: list[float] = []
+    eligible_signals = 0
+    skipped_below_minimum_stake = 0
+    skipped_due_to_cash_constraint = 0
 
     def settle_positions(up_to_time: pd.Timestamp) -> None:
         nonlocal cash, locked_capital, open_positions
@@ -304,6 +386,9 @@ def run_kelly_backtest(
                 execution_price = np.nan
                 won = False
 
+            if side != "NONE":
+                eligible_signals += 1
+
             fraction = kelly_fraction * full_kelly
             proposals.append(
                 {
@@ -322,7 +407,13 @@ def run_kelly_backtest(
 
         for proposal in proposals:
             stake = float(proposal["desired_stake"]) * scale
-            if proposal["side"] == "NONE" or stake <= 0.0:
+            if proposal["side"] == "NONE":
+                continue
+            if stake <= 0.0:
+                skipped_due_to_cash_constraint += 1
+                continue
+            if stake < minimum_executed_stake:
+                skipped_below_minimum_stake += 1
                 continue
             idx = proposal["idx"]
             sides.loc[idx] = str(proposal["side"])
@@ -365,6 +456,10 @@ def run_kelly_backtest(
         "total_return": cash / starting_bankroll - 1.0,
         "sharpe": sharpe,
         "max_drawdown": max_drawdown,
+        "minimum_executed_stake": minimum_executed_stake,
+        "eligible_signals": eligible_signals,
+        "skipped_due_to_cash_constraint": skipped_due_to_cash_constraint,
+        "skipped_below_minimum_stake": skipped_below_minimum_stake,
         "trades": int((ordered["backtest_side"] != "NONE").sum()),
     }
     return BacktestResult(metrics=metrics, equity_curve=equity_curve, trades=ordered)
@@ -402,7 +497,11 @@ def _save_figures(
         capsize=4,
     )
     ax.axhline(0, linestyle="--", color="gray")
-    ax.set(xlabel="Implied-probability bin midpoint", ylabel="Price minus outcome frequency", title="Favorite-longshot bias (95% confidence intervals)")
+    ax.set(
+        xlabel="Implied-probability bin midpoint",
+        ylabel="Price minus observed YES rate",
+        title="Pooled calibration bias (contract-level IID 95% intervals)",
+    )
     fig.tight_layout()
     fig.savefig(figure_dir / "favorite_longshot_bias.png", dpi=180)
     plt.close(fig)
@@ -412,7 +511,11 @@ def _save_figures(
         venue_midpoint = group["price_bin"].map(lambda interval: interval.mid).astype(float)
         ax.plot(venue_midpoint, group["bias"], marker="o", label=venue)
     ax.axhline(0, linestyle="--", color="gray")
-    ax.set(xlabel="Implied-probability bin midpoint", ylabel="Bias (price - frequency)", title="Bias by venue")
+    ax.set(
+        xlabel="Implied-probability bin midpoint",
+        ylabel="Bias (price - observed YES rate)",
+        title="Calibration bias by venue (descriptive)",
+    )
     ax.legend()
     fig.tight_layout()
     fig.savefig(figure_dir / "venue_bias.png", dpi=180)
@@ -422,7 +525,11 @@ def _save_figures(
     ax.plot(no_cost.equity_curve.index, no_cost.equity_curve.values, label="No transaction costs")
     ax.plot(with_cost.equity_curve.index, with_cost.equity_curve.values, label="2-cent spread")
     ax.axhline(10_000, linestyle="--", color="gray", label="Starting bankroll")
-    ax.set(xlabel="Date", ylabel="Book-value bankroll ($)", title="Quarter-Kelly out-of-sample equity")
+    ax.set(
+        xlabel="Date",
+        ylabel="Book-value bankroll ($)",
+        title="Quarter-Kelly out-of-sample equity (cost-basis positions)",
+    )
     ax.legend()
     fig.tight_layout()
     fig.savefig(figure_dir / "equity_curve.png", dpi=180)
@@ -431,10 +538,19 @@ def _save_figures(
     fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.5))
     axes[0].plot(sensitivity["k"], sensitivity["total_return"], marker="o")
     axes[0].axhline(0, linestyle="--", color="gray")
-    axes[0].set(xlabel="Kelly multiplier", ylabel="Total return", title="Return sensitivity")
+    axes[0].set(
+        xlabel="Kelly multiplier",
+        ylabel="Total return",
+        title="Return sensitivity",
+    )
     axes[1].plot(sensitivity["k"], sensitivity["max_drawdown"], marker="o", color="#b45309")
-    axes[1].set(xlabel="Kelly multiplier", ylabel="Maximum drawdown", title="Drawdown sensitivity")
-    fig.tight_layout()
+    axes[1].set(
+        xlabel="Kelly multiplier",
+        ylabel="Book-value maximum drawdown",
+        title="Drawdown sensitivity",
+    )
+    fig.suptitle("Fixed 2-cent entry-spread sensitivity (stylized execution)")
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
     fig.savefig(figure_dir / "kelly_sensitivity.png", dpi=180)
     plt.close(fig)
 
@@ -458,16 +574,20 @@ def run_analysis(config: AnalysisConfig) -> dict[str, object]:
         kelly_fraction=config.baseline_kelly_fraction,
         spread=0.0,
         starting_bankroll=config.starting_bankroll,
+        minimum_executed_stake=config.minimum_executed_stake,
     )
     with_cost = run_kelly_backtest(
         test,
         kelly_fraction=config.baseline_kelly_fraction,
         spread=config.spread,
         starting_bankroll=config.starting_bankroll,
+        minimum_executed_stake=config.minimum_executed_stake,
     )
     comparison = pd.DataFrame(
-        [no_cost.metrics, with_cost.metrics],
-        index=["No transaction costs", "2-cent spread"],
+        [
+            {"scenario": "No transaction costs", **no_cost.metrics},
+            {"scenario": "2-cent spread", **with_cost.metrics},
+        ]
     )
 
     sensitivity_rows = []
@@ -477,6 +597,7 @@ def run_analysis(config: AnalysisConfig) -> dict[str, object]:
             kelly_fraction=float(kelly_fraction),
             spread=config.spread,
             starting_bankroll=config.starting_bankroll,
+            minimum_executed_stake=config.minimum_executed_stake,
         )
         sensitivity_rows.append(result.metrics)
     sensitivity = pd.DataFrame(sensitivity_rows)
@@ -494,7 +615,7 @@ def run_analysis(config: AnalysisConfig) -> dict[str, object]:
     for filename, table in tables.items():
         table.to_csv(
             config.output_dir / filename,
-            index=filename == "backtest_comparison.csv",
+            index=False,
         )
 
     _save_figures(

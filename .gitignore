@@ -1,4 +1,6 @@
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -8,15 +10,32 @@ dist/
 build/
 *.egg-info/
 
+# Local configuration and credentials.
+.env
+.env.*
+!.env.example
+secrets/
+.secrets/
+credentials*.json
+credential*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Large raw/intermediate datasets are retained locally, not pushed to GitHub.
 data/kalshi_raw_markets.csv
 data/kalshi_progress.csv
 data/kalshi_48h.csv
 data/kalshi_clean.csv
 data/polymarket_raw_partial.json
+data/polymarket_raw_markets.json
 data/polymarket_binary.json
 data/polymarket_progress.csv
 data/polymarket_48h.csv
+data/*_raw_*.json
+data/*_raw_*.csv
+data/*_progress.csv
 
 # Local research notes and redundant notebook backups.
 notebooks/Note*.pdf

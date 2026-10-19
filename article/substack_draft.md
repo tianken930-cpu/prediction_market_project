@@ -1,156 +1,103 @@
-# The Longshots Were Overpriced. The Trade Still Lost Money.
+# Prediction Markets Were Informative, Imperfectly Calibrated, and Still Hard to Trade
 
-*What 84,767 resolved Kalshi and Polymarket contracts reveal about calibration, favorite-longshot bias, and the distance between a statistical pattern and a tradable edge.*
+*What 84,767 historical Kalshi and Polymarket contracts say about calibration, favorite–longshot-style patterns, and the difference between a statistical signal and an executable edge.*
 
-**Suggested Substack excerpt:** Prediction markets were meaningfully better than a naive forecast, but they were not perfectly calibrated. Longshots were overpriced, favorites were underpriced, and a clean out-of-sample Kelly strategy still lost money.
+**Suggested excerpt:** In this historical sample, prediction-market prices beat a naive base-rate forecast but were not perfectly calibrated. The pooled data show a favorite–longshot-style asymmetry, yet a simple out-of-sample fractional-Kelly strategy lost money under stylized execution assumptions.
 
 ---
 
-Prediction markets make a seductive promise: compress thousands of opinions, incentives, and fragments of information into one number that looks like a probability.
+Prediction markets turn a question into a number that looks like a probability. A YES contract at 30 cents appears to say that an event has roughly a 30% chance of occurring. That makes two questions unavoidable: are those numbers useful forecasts, and does any calibration error translate into a trade?
 
-A YES contract trading at 30 cents seems to say, simply, “30%.” But does a basket of those contracts actually resolve YES 30% of the time? And if it does not, can a trader turn the difference into profit?
+I studied 84,767 resolved binary contracts from Kalshi and Polymarket: 22,762 Kalshi contracts and 62,005 Polymarket contracts. The saved observation for each contract is anchored approximately 48 hours before the **scheduled** event or end time. It is not a uniform 48-hour-before-resolution sample: actual settlement or closure can occur earlier or later than scheduled time.
 
-I tested those questions on **84,767 resolved binary contracts** from Kalshi and Polymarket, using the market price approximately 48 hours before the event as the forecast. The sample contains 22,762 Kalshi contracts and 62,005 Polymarket contracts, with entries spanning March 2023 through September 2026.
+The result is more interesting than a simple “markets are efficient” or “markets are biased” story.
 
-The result is a useful warning for anyone doing systematic research:
+> In this historical sample, pooled prediction-market prices exhibit calibration asymmetries consistent with favorite–longshot bias under contract-level IID inference. The effect varies materially by venue and price range, and a simple out-of-sample calibration strategy does not produce positive returns under the modeled assumptions.
 
-> A market can show a real, statistically significant bias without offering a stable trading edge.
+## First: the probabilities contained useful information
 
-The prices were informative. They beat a naive base-rate forecast by a wide margin. They also displayed a clear favorite-longshot pattern: low-probability outcomes were generally overpriced, while several high-probability groups were underpriced. Yet a purged, out-of-sample strategy built to exploit that pattern lost money.
-
-That is not a disappointing result. It is the result that makes the project interesting.
-
-## First question: were the markets calibrated?
-
-Calibration asks whether quoted probabilities match empirical frequencies.
-
-If a market is perfectly calibrated, contracts priced near 70% should resolve YES about 70% of the time. I grouped contracts into 10-percentage-point price bands and compared each band’s mean market price with its observed resolution rate.
+The overall market Brier score was **0.1565**, versus **0.2213** for a forecast that always used the sample’s 33.1% YES rate. Lower is better, so the market probabilities substantially improved on that simple constant benchmark.
 
 ![Calibration curve](../outputs/figures/calibration_curve.png)
 
-The curve follows the diagonal closely enough to show that market prices contain substantial information, but the deviations are systematic rather than random.
-
-The overall **Brier score was 0.1565**, compared with **0.2213** for a forecast that always predicts the sample’s 33.1% YES rate. Because lower is better, the market improves on that naive benchmark by 0.0648 Brier points, or about 29%.
-
-Kalshi recorded the lower Brier score:
-
-| Venue | Contracts | Market Brier | Naive Brier |
+| Venue | Contracts | Market Brier | Own base-rate Brier |
 |---|---:|---:|---:|
 | Kalshi | 22,762 | 0.1390 | 0.2202 |
 | Polymarket | 62,005 | 0.1630 | 0.2217 |
 | Combined | 84,767 | 0.1565 | 0.2213 |
 
-This does not prove that Kalshi is universally “better.” The venues contain different mixtures of categories, contract designs, participant bases, and time periods. It does show that, in this sample, both venues beat their own unconditional base-rate forecasts.
+This is a statement about this sample, not proof that either venue is universally better. The venues differ in market mix, contract design, time period, and participants.
 
-## The favorite-longshot pattern is visible
+## Then: calibration was not perfect
 
-For each probability bin, I defined bias as:
+Calibration asks whether contracts assigned a given probability resolve at that frequency. I divided prices into ten percentage-point bands and defined bias as **mean market price − observed YES frequency**. Positive bias means the market price exceeded the realized YES rate; negative bias means it fell below that rate.
 
-**mean market price − observed YES frequency**
-
-A positive number means contracts were overpriced. A negative number means they resolved YES more often than their prices implied.
-
-![Favorite-longshot bias](../outputs/figures/favorite_longshot_bias.png)
-
-The lowest-priced contracts show classic longshot overpricing:
+![Pooled calibration bias](../outputs/figures/favorite_longshot_bias.png)
 
 | Price band | Contracts | Mean price | YES frequency | Bias |
 |---|---:|---:|---:|---:|
 | 0–10% | 20,570 | 2.84% | 1.98% | +0.86 pp |
 | 10–20% | 6,399 | 15.27% | 12.94% | +2.33 pp |
 | 20–30% | 9,079 | 25.12% | 19.13% | +5.99 pp |
-
-All three differences are statistically significant in a one-sample t-test. The 20–30% band is especially striking: a contract priced around 25% resolved YES only about 19% of the time.
-
-The pattern reverses among stronger favorites:
-
-| Price band | Contracts | Mean price | YES frequency | Bias |
-|---|---:|---:|---:|---:|
+| 60–70% | 2,635 | 65.03% | 66.53% | −1.50 pp |
 | 70–80% | 2,211 | 75.31% | 79.78% | −4.48 pp |
 | 80–90% | 2,008 | 86.06% | 91.73% | −5.68 pp |
-| 90–100% | 2,639 | 96.95% | 97.69% | −0.74 pp |
 
-This is the familiar favorite-longshot shape. Traders appear willing to pay too much for a small chance at a large payoff, while very likely outcomes can trade a little too cheaply.
+The 20–30% result is large in the pooled sample: contracts priced around 25% resolved YES about 19% of the time. The 80–90% result points in the opposite direction. This is consistent with a favorite–longshot-style calibration asymmetry, but the shape is not perfectly monotonic: the pooled 60–70% bin is not statistically significant under the project’s contract-level IID test.
 
-## The two venues do not have the same shape
+## Venue differences are part of the result
 
 ![Bias by venue](../outputs/figures/venue_bias.png)
 
-Both venues overprice the lowest-probability contracts by a similar absolute amount: roughly 0.94 percentage points on Kalshi and 0.83 points on Polymarket in the 0–10% band.
+The two venues should not be described as having the same pattern. The 20–30% overpricing appears on both, but it is much larger on Kalshi. At the upper end, the pooled 80–90% favorite effect is substantially stronger on Kalshi; the comparable Polymarket estimate is near zero and not statistically significant.
 
-The upper end is where the samples diverge. In the 80–90% band, Kalshi prices were 10.5 percentage points below the observed YES rate, while the comparable Polymarket bias was close to zero and statistically insignificant.
+Those differences are descriptive, not causal. They could reflect category mix, contract design, liquidity, correlated questions, or measurement choices. They do not identify a venue-level behavioral mechanism.
 
-That difference is descriptive, not automatically causal. It could reflect category mix, liquidity, contract design, correlated markets, or the text-based classifier used to assign Polymarket categories. A stronger follow-up would compare matched market types or run a contract-level regression with venue, category, time, and liquidity controls.
+## A historical calibration curve did not become trading alpha
 
-## Then I tried to trade it
+A pattern in a full historical sample is not yet a trading strategy. To impose a basic time boundary, I used a purged chronological split:
 
-Finding a pattern in the full sample is easy to overstate. A tradable test must only use information that would have been available at the time.
+- 58,949 contracts whose outcomes resolved before the first test entry form the training set.
+- 25,468 later contracts form the test set.
+- Each test contract receives the historical outcome rate of its training-period price bin.
+- Positions use a cash-constrained quarter-Kelly rule.
+- I compare a zero-cost assumption with a fixed 2-cent total entry-spread sensitivity.
 
-I therefore used a **purged chronological split**:
-
-- The first test entry occurs on November 26, 2025.
-- The training set contains 58,949 contracts whose outcomes were already known before that point.
-- The test set contains 25,468 later contracts.
-- Each test contract receives a model probability from its training-period calibration bin.
-- Positions are sized with quarter Kelly and constrained by available cash.
-- I compare idealized fills with a second simulation that pays half of a fixed 2-cent spread on entry.
-
-This setup is deliberately simple. It asks whether the historical calibration curve, by itself, persists strongly enough to trade.
-
-It did not.
+The simulation counts a trade only if its scaled stake is at least one cent; positive mathematical edges before cash and stake filters are reported separately in the repository outputs.
 
 ![Out-of-sample equity curve](../outputs/figures/equity_curve.png)
 
-| Scenario | Final bankroll | Total return | Sharpe | Max drawdown | Trades |
+| Scenario | Final bankroll | Total return | Book-value Sharpe | Book-value max drawdown | Executed trades |
 |---|---:|---:|---:|---:|---:|
-| No transaction costs | $5,384 | −46.2% | −0.34 | 60.7% | 6,069 |
-| 2-cent spread | $6,114 | −38.9% | −1.11 | 47.4% | 5,135 |
+| No transaction-cost assumption | $5,383 | −46.2% | −0.34 | 60.7% | 5,272 |
+| Fixed 2-cent entry spread | $6,113 | −38.9% | −1.11 | 47.4% | 4,546 |
 
-The cost-adjusted version loses less money, but that is not because costs help. The spread removes many marginal signals, so the strategy trades less. Its risk-adjusted performance remains poor.
+The fixed-spread run lost less money, but costs did not help. The spread removes marginal signals and changes the set of simulated positions. Every fixed-spread Kelly multiplier from 0.1 through 1.0 ended below the starting bankroll.
 
-Reducing position size helps, but does not rescue the strategy. At one-tenth Kelly—the least aggressive setting tested with the 2-cent spread—the strategy still loses 18.7%, and every Kelly multiplier from 0.1 to 1.0 finishes below the starting bankroll.
+That negative result is informative. It shows that the simple calibration-bin signal was not robust enough to create positive returns in the held-out period under these assumptions. Statistical significance is not the same thing as a large, stable, or tradable edge.
 
-![Kelly sensitivity](../outputs/figures/kelly_sensitivity.png)
+## Why the caution matters
 
-## Why a significant bias can still be unprofitable
+The analysis has meaningful limits:
 
-There are several reasons the full-sample result does not translate cleanly into P&L.
+- The timing convention is based on scheduled event/end metadata. Actual resolution timing varies, and historical metadata may have changed.
+- The historical sample can involve post-close metadata filters. This is a retrospective sample-selection limitation, not evidence that test outcomes directly entered the chronological calibration model.
+- Kalshi and Polymarket price fields are not guaranteed to be the same microstructure object. They should not be treated as verified historical executable bid/ask quotes.
+- Liquidity, depth, volume, fill probability, fees, slippage, queue position, capacity, and historical executable quotes are not fully modeled.
+- The 2-cent spread is a fixed stylized sensitivity, not a reconstruction of historical contract-level transaction costs.
+- The reported confidence intervals and p-values treat contracts as independent. Related events and markets can be correlated, so IID uncertainty may be too narrow. Venue, category, and bin comparisons are exploratory and are not adjusted for multiple testing.
+- Categories are not generated identically across venues; Polymarket labels can rely on text heuristics.
+- Open positions are held at cash plus locked capital, or cost basis, rather than fully marked to market. Sharpe and drawdown are book-value metrics.
+- This is a selected historical sample, not demonstrated coverage of all prediction markets ever listed.
 
-First, **statistical significance is not economic significance**. With more than 84,000 observations, even a small average pricing error can be estimated precisely. A 0.86-point bias in the lowest bin is real in the sample, but may still be too small, unstable, or inaccessible after execution frictions.
+## The takeaway
 
-Second, **the effect is not stationary**. A calibration curve estimated across years and venues can hide changes in participant behavior, market composition, or information quality. The held-out period does not have to repeat the training average.
+Prediction-market probabilities in this sample were useful forecasts. They were also not perfectly calibrated, and the pooled evidence contains a favorite–longshot-style asymmetry with substantial venue heterogeneity.
 
-Third, **contracts are not independent**. Prediction markets frequently contain clusters of related questions. Thousands of rows can reflect fewer underlying events, which makes naive confidence intervals look more decisive than event-clustered uncertainty would.
+But observed calibration bias is not necessarily executable trading alpha. A simple, transparent out-of-sample Kelly implementation lost money even before a full model of realistic execution frictions.
 
-Fourth, **binning throws away information**. Every contract in a 10-point band receives the same historical model probability. That is transparent and easy to audit, but too coarse to distinguish a stale 21% market from a liquid 29% market driven by new information.
-
-Finally, **execution is more complicated than a fixed spread**. Real strategies face depth limits, fees, partial fills, changing spreads, and the possibility that the displayed historical price was not available at meaningful size.
-
-## What I would do next
-
-The next version of this project should focus less on adding complexity to the Kelly formula and more on improving validation and signal quality.
-
-I would:
-
-1. Group related contracts by event and use event-clustered confidence intervals.
-2. Replace the single split with rolling, purged walk-forward validation.
-3. Compare matched venue/category cohorts rather than raw venue averages.
-4. Add liquidity, volume, spread, and price-staleness features.
-5. Fit a regularized calibration model and compare it with the simple bin estimator.
-6. Test whether the bias is concentrated in particular market types or regimes.
-7. Simulate order-book capacity rather than assuming every signal can be filled.
-
-## The real takeaway
-
-Prediction markets in this sample were useful forecasters. Their prices substantially outperformed an unconditional base rate, and the calibration curve revealed a recognizable favorite-longshot bias.
-
-But “the market is biased” and “I can profit from the bias” are different claims.
-
-The first claim received strong descriptive support. The second failed a basic out-of-sample test.
-
-That gap is exactly where good quantitative research begins: not with the discovery of a pattern, but with the attempt to make it survive time, costs, sizing, and skepticism.
+That is the useful result: good quantitative research does not stop after finding a pattern. It asks whether the pattern survives time, dependence, selection, sizing, and execution.
 
 ---
 
-*Method note: The analysis uses resolved binary contracts, prices observed approximately 48 hours before the event, 10-percentage-point calibration bins, one-sample t-tests on price-minus-outcome errors, and a cash-constrained fractional-Kelly backtest. Polymarket categories are inferred from market text. All code, tables, figures, and caveats are included in the accompanying repository.*
-
+*Method note: the canonical package analysis uses the committed clean CSV, ten-percentage-point bins, contract-level IID t-tests on price-minus-outcome errors, and a purged chronological split. The accompanying repository can rebuild the analysis from the committed clean dataset, but not perfectly reconstruct the original historical API acquisition from a fresh clone.*
